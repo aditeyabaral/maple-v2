@@ -1,2 +1,2 @@
 # plum
-Perplexity guided Learning to Understand sequences for improving MAPLE
+Perplexity guided Learning for Understanding better sequences and improving Maple
