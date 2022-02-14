@@ -4,3 +4,4 @@ __pycache__/
 modelfolder/
 .~*
 saved_models/
+log*/

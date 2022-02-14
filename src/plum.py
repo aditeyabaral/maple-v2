@@ -1,224 +1,119 @@
-# Code adapted from our previous work: https://github.com/aditeyabaral/maple/blob/main/models/maple.py
-
-import os
-import nltk
-import math
 import torch
-import argparse
-import platform
-import pandas as pd
-from datasets import Dataset
-from transformers import AutoTokenizer
-from transformers import AutoModelForTokenClassification, TrainingArguments, Trainer
+import torch.nn as nn
+from transformers import AutoModelForTokenClassification , AutoTokenizer
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast, RobertaTokenizerFast, XLMRobertaTokenizerFast
 
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-from nltk.tokenize import word_tokenize
 
+class PLUM(nn.Module):
+    def __init__(self, selector_type='roberta-base', use_gpt2=True, freeze_gpt2=True, device='cpu'):
+        super(PLUM, self).__init__()
+        self.device = device
 
-class MapleDataset(torch.utils.data.Dataset):
-    def __init__(self, encodings, labels):
-        self.encodings = encodings
-        self.labels = labels
+        self.use_gpt2 = use_gpt2
+        self.freeze_gpt2 = freeze_gpt2
+        if self.use_gpt2:
+            self.gpt2_model = GPT2LMHeadModel.from_pretrained('gpt2')
+            self.gpt2_tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
+            if self.freeze_gpt2:
+                for param in self.gpt2_model.parameters():
+                    param.requires_grad = False
+                for param in self.gpt2_model.lm_head.parameters():        
+                    param.requires_grad = True
 
-    def __getitem__(self, idx):
-        item = {key: torch.tensor(val[idx])
-                for key, val in self.encodings.items()}
-        item['labels'] = torch.tensor(self.labels[idx])
-        return item
-
-    def __len__(self):
-        return len(self.labels)
-
-
-class PerplexityTrainer(Trainer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-            
-    def compute_loss(self, model, inputs, return_outputs=False):
-        batch_size = len(inputs["input_ids"])
-        poems = list()
-        for i in range(batch_size):
-            text = tokenizer.decode(inputs["input_ids"][i])
-            tokenized_text = tokenizer.tokenize(text)
-            labels = inputs["labels"][i].tolist()
-            words = list()
-            for idx, value in enumerate(labels):
-                if value == 1:
-                    words.append(tokenized_text[idx])
-            poem = ' '.join(words)
-            poems.append(poem)
-        perplexity_scores = perplexityGPT2(poems)
-        perplexity_loss = (sum(perplexity_scores)/batch_size) ** 0.5
-        loss = torch.tensor(perplexity_loss, requires_grad=True)
-        return (loss, poems) if return_outputs else loss
-
-
-def encode_tags(tags, encodings, label_all_tokens=True):
-    labels = [[tag2id[tag] for tag in doc] for doc in tags]
-    encoded_labels = list()
-    for i, label in enumerate(labels):
-        word_ids = encodings.word_ids(batch_index=i)
-        previous_word_idx = None
-        label_ids = list()
-        for word_idx in word_ids:
-            if word_idx is None:
-                label_ids.append(-100)
-            elif word_idx != previous_word_idx:
-                label_ids.append(label[word_idx])
-            else:
-                label_ids.append(label[word_idx] if label_all_tokens else -100)
-            previous_word_idx = word_idx
-        encoded_labels.append(label_ids)
-    return encoded_labels
-
-
-def perplexityGPT2(sentences):
-  ppl = list()
-  for index, sent in enumerate(sentences):
-    tokenize_input = gpt2_tokenizer.encode(sent)
-    tensor_input = torch.tensor([tokenize_input])
-    loss = gpt2_model(tensor_input, labels=tensor_input)[0]
-    ppl.append(math.exp(loss))
-  return ppl
-
-
-parser = argparse.ArgumentParser(description='Train a PLUM Model')
-parser.add_argument('--model', '-m', type=str,
-                    help='Transformer model name/path to train', required=True)
-parser.add_argument('--dataset', '-d', type=str,
-                    help='Path to dataset in required format', required=True)
-parser.add_argument('--hub', '-hf', type=bool,
-                    help='Push model to HuggingFace Hub', required=False, default=False)
-parser.add_argument('--batch_size', '-b', type=int,
-                    help='Batch size', required=False, default=8)
-parser.add_argument('--learning_rate', '-lr', type=float,
-                    help='Learning rate', required=False, default=2e-5)
-parser.add_argument('--epochs', '-e', type=int,
-                    help='Number of epochs', required=False, default=20)
-parser.add_argument('--username', '-u', type=str,
-                    help='Username for HuggingFace Hub', required=False)
-parser.add_argument('--password', '-p', type=str,
-                    help='Password for HuggingFace Hub', required=False)
-parser.add_argument('--output', '-o', type=str,
-                    help='Output directory path', required=False, default='saved_models/')
-parser.add_argument('--hub_name', '-hn', type=str,
-                    help='Name of the model in the HuggingFace Hub', required=False)
-args = parser.parse_args()
-print(args)
-
-MODEL_NAME = args.model
-DATASET_PATH = args.dataset
-PUSH_TO_HUB = args.hub
-EPOCHS = args.epochs
-BATCH_SIZE = args.batch_size
-LEARNING_RATE = args.learning_rate
-USERNAME = args.username
-PASSWORD = args.password
-OUTPUT_PATH = args.output
-HUB_NAME = args.hub_name
-
-if PUSH_TO_HUB is not None and PUSH_TO_HUB:
-    if USERNAME is None or PASSWORD is None:
-        print("Please provide username and password for pushing to HuggingFace Hub!\nRun the script with python maple.py -h for help.")
-        exit()
-    else:
-        print("Logging into HuggingFace Hub!")
-        if platform.system() == "Linux":
-            os.system(
-                f"printf '{USERNAME}\{PASSWORD}' | transformers-cli login")
+        self.selector_type = selector_type
+        if selector_type == 'context':
+            pass
         else:
-            print(
-                "Could not login to HuggingFace Hub automatically! Please enter credentials again")
-            os.system("transformers-cli login")
+            self.maple = AutoModelForTokenClassification.from_pretrained(selector_type)
+            self.maple_tokenizer = self.get_tokenizer(selector_type)
+            self.maple.resize_token_embeddings(len(self.maple_tokenizer))
 
-df = pd.read_json(DATASET_PATH)
-df = df.drop_duplicates(subset=["passage", "poem"])
-df["tokens"] = df["passage"].apply(lambda x: word_tokenize(x))
-ner_tags = list()
-for i in range(df.shape[0]):
-    indices = df["indices"][i]
-    length = len(df["tokens"][i])
-    ner_tag = ['O' for _ in range(length)]
-    for idx in indices:
-        ner_tag[idx] = 'W'
-    ner_tags.append(ner_tag)
-df["ner_tags"] = ner_tag
 
-train_df = df
-test_df = df.sample(frac=0.1, random_state=0)
+    def get_tokenizer(self, selector_type):
+        if "xlm-roberta" in selector_type:
+            tokenizer = XLMRobertaTokenizerFast.from_pretrained(
+                selector_type, add_prefix_space=True)
+        elif "roberta" in selector_type:
+            tokenizer = RobertaTokenizerFast.from_pretrained(
+                selector_type, add_prefix_space=True)
+        elif "gpt" in selector_type:
+            tokenizer = GPT2TokenizerFast.from_pretrained(
+                selector_type, add_prefix_space=True)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(selector_type)
+        
+        special_tokens = {
+            'bos_token': '<|startoftext|>',
+            'pad_token': '<|padtext|>',
+            'sep_token': '<|septext|>',
+        }
+        tokenizer.add_special_tokens(special_tokens)
+        return tokenizer
 
-tokens = df["tokens"]
-tags = df["ner_tags"]
-unique_tags = ["O", "W"]
-tag2id = {tag: id for id, tag in enumerate(unique_tags)}
-id2tag = {id: tag for tag, id in tag2id.items()}
-train_dataset = Dataset.from_pandas(train_df)
-test_dataset = Dataset.from_pandas(test_df)
-train_texts = list(train_df["tokens"].values)
-val_texts = list(test_df["tokens"].values)
-train_tags = list(train_df["ner_tags"].values)
-val_tags = list(test_df["ner_tags"].values)
 
-gpt2_model_name = "gpt2"
-gpt2_model = GPT2LMHeadModel.from_pretrained(gpt2_model_name)
-gpt2_tokenizer = GPT2TokenizerFast.from_pretrained(gpt2_model_name)
+    def get_encodings_and_labels(self, tokens, labels, label_all_tokens=False):
+        token_encodings = list()
+        attention_masks = list()
+        label_encodings = list()
+        for idx, t in enumerate(tokens):
+            tokenized_input = self.maple_tokenizer.encode_plus(t, is_split_into_words=True, max_length=128, padding='max_length', truncation=True)
+            input_ids = torch.tensor(tokenized_input['input_ids'])
+            attention_mask = torch.tensor(tokenized_input['attention_mask'])
+            token_encodings.append(input_ids)
+            attention_masks.append(attention_mask)
 
-if "xlm-roberta" in MODEL_NAME:
-    tokenizer = XLMRobertaTokenizerFast.from_pretrained(
-        MODEL_NAME, add_prefix_space=True)
-elif "roberta" in MODEL_NAME:
-    tokenizer = RobertaTokenizerFast.from_pretrained(
-        MODEL_NAME, add_prefix_space=True)
-elif "gpt" in MODEL_NAME:
-    tokenizer = GPT2TokenizerFast.from_pretrained(
-        MODEL_NAME, add_prefix_space=True)
-    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-else:
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+            word_ids = tokenized_input.word_ids(batch_index=0)
+            previous_word_idx = None
+            label_ids = list()
+            for word_idx in word_ids:
+                if word_idx is None:
+                    label_ids.append(-100)
+                elif word_idx != previous_word_idx:
+                    label_ids.append(labels[idx][word_idx])
+                else:
+                    label_ids.append(labels[idx][word_idx] if label_all_tokens else -100)
+                previous_word_idx = word_idx
+            label_encodings.append(torch.tensor(label_ids))
 
-train_encodings = tokenizer(train_texts, is_split_into_words=True,
-                            return_offsets_mapping=True, padding=True, truncation=True)
-val_encodings = tokenizer(val_texts, is_split_into_words=True,
-                          return_offsets_mapping=True, padding=True, truncation=True)
-train_labels = encode_tags(train_tags, train_encodings)
-val_labels = encode_tags(val_tags, val_encodings)
+        token_encodings = torch.stack(token_encodings).to(self.device)
+        attention_masks = torch.stack(attention_masks).to(self.device)
+        label_encodings = torch.stack(label_encodings).to(self.device)
+        return token_encodings, attention_masks, label_encodings
 
-offset_mapping_train = train_encodings.pop("offset_mapping")
-offset_mapping_val = val_encodings.pop("offset_mapping")
-train_dataset = MapleDataset(train_encodings, train_labels)
-val_dataset = MapleDataset(val_encodings, val_labels)
-model = AutoModelForTokenClassification.from_pretrained(
-    MODEL_NAME, num_labels=2)
 
-args = TrainingArguments(
-    f"{OUTPUT_PATH}/{MODEL_NAME}",
-    save_strategy="epoch",
-    evaluation_strategy="epoch",
-    load_best_model_at_end=True,
-    learning_rate=LEARNING_RATE,
-    per_device_train_batch_size=BATCH_SIZE,
-    per_device_eval_batch_size=BATCH_SIZE,
-    num_train_epochs=EPOCHS,
-    weight_decay=0.1,
-    # save_total_limit=1,   # to save only the last checkpoint
-    logging_steps=50
-)
+    def forward(self, tokens, labels):
+        if self.selector_type != 'context':
+            token_encodings, attention_masks, label_encodings = self.get_encodings_and_labels(tokens, labels)
+            outputs = self.maple(input_ids=token_encodings, attention_mask=attention_masks, labels=label_encodings)
+            loss_m, logits = outputs[:2]
+            logits = logits.softmax(dim=2).argmax(dim=2)
+            
+        else:
+            pass
 
-trainer = PerplexityTrainer(
-    model=model,
-    args=args,
-    train_dataset=train_dataset,
-    eval_dataset=val_dataset
-)
+        if self.use_gpt2:
+            loss_lm = list()
+            for i in range(token_encodings.shape[0]):
+                input_sequence = token_encodings[i]
+                logit_sequence = logits[i]
+                attention_mask = attention_masks[i]
+                output_sequence = list()
+                for j in range(input_sequence.shape[0]):
+                    if attention_mask[j] and logit_sequence[j]:
+                        output_sequence.append(input_sequence[j])
+                output_sequence = self.maple_tokenizer.decode(output_sequence).strip()
 
-trainer.train()
-# trainer.evaluate()
+                if not output_sequence: # if no words are chosen, take entire input sequence
+                    output_sequence = ' '.join(tokens[i])
 
-if PUSH_TO_HUB is not None and PUSH_TO_HUB:
-    print("Pushing to HuggingFace Hub!")
-    model.push_to_hub(HUB_NAME)
-    tokenizer.push_to_hub(HUB_NAME)
+                input_sequence_ids = self.gpt2_tokenizer.encode(output_sequence)
+                input_sequence_ids = torch.tensor(input_sequence_ids).to(self.device)
+                loss = self.gpt2_model(input_ids=input_sequence_ids, labels=input_sequence_ids).loss
+                loss = torch.exp(loss)
+                loss_lm.append(loss)
+            
+            loss_lm = torch.stack(loss_lm).mean()
+        else:
+            loss_lm = 0
+        
+        return loss_m, loss_lm
