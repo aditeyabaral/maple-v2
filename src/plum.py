@@ -5,7 +5,7 @@ from transformers import GPT2LMHeadModel, GPT2TokenizerFast, RobertaTokenizerFas
 
 
 class PLUM(nn.Module):
-    def __init__(self, selector_type='roberta-base', use_gpt2=True, freeze_gpt2=True, device='cpu'):
+    def __init__(self, selector_type='roberta-base', use_gpt2=True, freeze_gpt2='partial', device='cpu'):
         super(PLUM, self).__init__()
         self.device = device
 
@@ -14,11 +14,12 @@ class PLUM(nn.Module):
         if self.use_gpt2:
             self.gpt2_model = GPT2LMHeadModel.from_pretrained('gpt2')
             self.gpt2_tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
-            if self.freeze_gpt2:
+            if self.freeze_gpt2 != 'none':
                 for param in self.gpt2_model.parameters():
                     param.requires_grad = False
-                for param in self.gpt2_model.lm_head.parameters():        
-                    param.requires_grad = True
+                if self.freeze_gpt2 == 'partial':
+                    for param in self.gpt2_model.lm_head.parameters():        
+                        param.requires_grad = True
 
         self.selector_type = selector_type
         if selector_type == 'context':

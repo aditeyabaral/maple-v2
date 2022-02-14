@@ -20,7 +20,7 @@ parser.add_argument('--selector_model', '-s', type=str,
                     help='Transformer path or word selector type', default='roberta-base')
 parser.add_argument('--use_gpt2', '-g', action='store_true', 
                     help='Use GPT2 for perplexity loss')
-parser.add_argument('--freeze_gpt2', '-fg', action='store_true',  
+parser.add_argument('--freeze_gpt2', '-fg', default='partial', choices=['none', 'partial', 'all'],
                     help='Freeze GPT2 weights')
 parser.add_argument('--batch_size', '-bs', type=int,
                     help='Batch size', default=4)
@@ -39,6 +39,7 @@ parser.add_argument('--resume_checkpoint', '-r', action='store_true',
 parser.add_argument('--checkpoint_path', '-cp', default=None, type=str, help='Path to checkpoint')
 parser.add_argument('--device', '-dev', default='cuda', type=str, help='Device to use')
 args = parser.parse_args()
+print(args)
 
 DATASET_PATH = args.data
 SELECTOR_MODEL = args.selector_model
