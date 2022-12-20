@@ -5,3 +5,4 @@ modelfolder/
 .~*
 saved_models/
 log*/
+.idea/
