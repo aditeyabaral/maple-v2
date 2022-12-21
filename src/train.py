@@ -119,8 +119,18 @@ def save_model(current_epoch):
                 use_auth_token=AUTH_TOKEN,
                 commit_message=f"Epoch {current_epoch}",
             )
+            model.selector_tokenizer.push_to_hub(
+                f"{HUB_MODEL_NAME}",
+                use_auth_token=AUTH_TOKEN,
+                commit_message=f"Epoch {current_epoch}",
+            )
         else:
             model.token_selector.selector_model.push_to_hub(
+                f"{HUB_MODEL_NAME}",
+                use_auth_token=AUTH_TOKEN,
+                commit_message=f"Epoch {current_epoch}",
+            )
+            model.token_selector.selector_tokenizer.push_to_hub(
                 f"{HUB_MODEL_NAME}",
                 use_auth_token=AUTH_TOKEN,
                 commit_message=f"Epoch {current_epoch}",
