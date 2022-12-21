@@ -46,6 +46,8 @@ parser.add_argument('--save-model-path', '-smp', type=str, default='./saved_mode
                     help='Path to save the model')
 parser.add_argument('--save-every', '-se', type=int, default=1,
                     help='Save model every n epochs')
+parser.add_argument('--save-local', '-sl', default=False, action='store_true',
+                    help='Save model locally')
 parser.add_argument("--hub-model-name", "-hmn", type=str, help="Name of the HuggingFace Hub model")
 parser.add_argument("--auth-token", "-at", type=str, help="Huggingface Auth token")
 parser.add_argument('--resume', '-r', default=None, type=str, help='Path to checkpoint')
@@ -68,6 +70,7 @@ BETA = args.beta
 LEARNING_RATE = args.learning_rate
 SAVE_MODEL_PATH = args.save_model_path
 SAVE_EVERY = args.save_every
+SAVE_LOCAL = args.save_local
 CHECKPOINT_PATH = args.resume
 HUB_MODEL_NAME = args.hub_model_name
 AUTH_TOKEN = args.auth_token
@@ -96,18 +99,19 @@ def read_dataset(path):
 
 
 def save_model(current_epoch):
-    torch.save(
-        {
-            'selector_type': SELECTOR_TYPE,
-            'selector_model_path': SELECTOR_MODEL_PATH,
-            'gpt_model_path': GPT_MODEL_PATH,
-            'freeze_gpt': FREEZE_GPT,
-            'epoch': current_epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict()
-        },
-        f'{SAVE_MODEL_PATH}/model_epoch_{current_epoch}.pt'
-    )
+    if SAVE_LOCAL:
+        torch.save(
+            {
+                'selector_type': SELECTOR_TYPE,
+                'selector_model_path': SELECTOR_MODEL_PATH,
+                'gpt_model_path': GPT_MODEL_PATH,
+                'freeze_gpt': FREEZE_GPT,
+                'epoch': current_epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict()
+            },
+            f'{SAVE_MODEL_PATH}/model_epoch_{current_epoch}.pt'
+        )
     if AUTH_TOKEN is not None and HUB_MODEL_NAME is not None:
         if model.selector_type == 'maple':
             model.token_selector.push_to_hub(
@@ -170,7 +174,7 @@ for epoch in tqdm(range(1, EPOCHS + 1)):
                 writer.add_scalar(f"Loss/{key}", outputs[key].item(), steps)
 
         for idx, generated_sequence in enumerate(outputs.get("generated_sequences", [])):
-            writer.add_text(batch_passages[idx], generated_sequence, steps)
+            writer.add_text(batch_passages[idx][:30], generated_sequence, steps)
 
         loss = torch.tensor(0.0).to(DEVICE)
         if USE_SELECTOR_LOSS:
