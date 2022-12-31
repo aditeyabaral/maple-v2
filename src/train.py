@@ -48,6 +48,8 @@ parser.add_argument('--save-every', '-se', type=int, default=1,
                     help='Save model every n epochs')
 parser.add_argument('--save-local', '-sl', default=False, action='store_true',
                     help='Save model locally')
+parser.add_argument('--generate-every', '-ge', type=int, default=200,
+                    help='Generate every n batches')
 parser.add_argument("--hub-model-name", "-hmn", type=str, help="Name of the HuggingFace Hub model")
 parser.add_argument("--auth-token", "-at", type=str, help="Huggingface Auth token")
 parser.add_argument('--resume', '-r', default=None, type=str, help='Path to checkpoint')
@@ -71,6 +73,7 @@ LEARNING_RATE = args.learning_rate
 SAVE_MODEL_PATH = args.save_model_path
 SAVE_EVERY = args.save_every
 SAVE_LOCAL = args.save_local
+GENERATE_EVERY = args.generate_every
 CHECKPOINT_PATH = args.resume
 HUB_MODEL_NAME = args.hub_model_name
 AUTH_TOKEN = args.auth_token
@@ -183,8 +186,9 @@ for epoch in tqdm(range(1, EPOCHS + 1)):
             if key.startswith('loss') and outputs[key] is not None:
                 writer.add_scalar(f"Loss/{key}", outputs[key].item(), steps)
 
-        for idx, generated_sequence in enumerate(outputs.get("generated_sequences", [])):
-            writer.add_text(batch_passages[idx][:30], generated_sequence, steps)
+        if i % (GENERATE_EVERY * BATCH_SIZE) == 0:
+            for idx, generated_sequence in enumerate(outputs.get("generated_sequences", [])):
+                writer.add_text(batch_passages[idx][:30], generated_sequence, steps)
 
         loss = torch.tensor(0.0).to(DEVICE)
         if USE_SELECTOR_LOSS:

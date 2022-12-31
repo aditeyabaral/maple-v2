@@ -110,7 +110,7 @@ PLUM can use 2 methods to select tokens from a passage:
 
 Here is a minimal example to train a PLUM model:
 
-```bash
+```py
 from plum import PLUM
 
 # Initialise a PLUM model with RoBERTa Whole Word Context Selector as Token Selector and GPT2 as Perplexity Evaluator
@@ -122,7 +122,7 @@ model = PLUM(
     freeze_gpt=True,
     device="cuda"
 ).to("cuda")
-  
+
 # Perform a forward pass and return losses and generated sequences
 outputs = model(passages=passages, tokens=tokens, labels=labels)
 outputs.keys()
@@ -139,7 +139,7 @@ loss.backward()
 
 You can set the arguments such that a MAPLE model is trained. Set the following arguments:
 
-```bash
+```py
 from plum import PLUM
 
 # Initialise a MAPLE model with RoBERTa Token Classifier as Token Selector and no GPT2 Perplexity Evaluator
@@ -149,7 +149,7 @@ model = PLUM(
     gpt_model_path=None,
     device="cuda"
 ).to("cuda")
-  
+
 # Perform a forward pass and return losses and generated sequences
 outputs = model(passages=passages, tokens=tokens, labels=labels)
 outputs.keys()
