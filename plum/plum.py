@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .context_selector import ContextSelector
 from transformers import AutoModelForCausalLM, AutoModelForTokenClassification, AutoTokenizer
+
+from .context_selector import ContextSelector
 
 
 class PLUM(nn.Module):

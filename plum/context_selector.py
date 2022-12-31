@@ -49,16 +49,7 @@ class ContextSelector(nn.Module):
         for param in self.parameters():
             param.requires_grad = True
 
-    def filter_text(self, passage):
-        passage = passage.translate(str.maketrans("", "", punctuations))
-        passage = word_tokenize(passage)
-        passage = [word for word in passage if word not in stopwords]
-        return " ".join(passage)
-
-    def forward_whole_word_selection(self, passages, preprocess=False, threshold=0.5):
-        if preprocess:
-            passages = list(map(self.filter_text, passages))
-
+    def forward_whole_word_selection(self, passages, threshold=0.5):
         embedding_matrix = self.selector_model.get_input_embeddings()._parameters['weight'].to(self.device)
         context_keywords = list()
         loss_cs = list()
@@ -67,7 +58,7 @@ class ContextSelector(nn.Module):
                 word: self.selector_tokenizer.encode(
                     word,
                     add_special_tokens=False
-                ) for word in passage.split()
+                ) for word in word_tokenize(passage)
             }
             input_ids = list(token_ids_map.values())
             input_ids = np.asarray([item for sublist in input_ids for item in sublist])
@@ -102,10 +93,7 @@ class ContextSelector(nn.Module):
         loss_cs = torch.stack(loss_cs).mean()
         return loss_cs, context_keywords
 
-    def forward_token_selection(self, passages, preprocess=False, threshold=0.5):
-        if preprocess:
-            passages = list(map(self.filter_text, passages))
-
+    def forward_token_selection(self, passages, threshold=0.5):
         embedding_matrix = self.selector_model.get_input_embeddings()._parameters['weight'].to(self.device)
         context_keywords = list()
         loss_cs = list()
@@ -140,10 +128,10 @@ class ContextSelector(nn.Module):
         loss_cs = torch.stack(loss_cs).mean()
         return loss_cs, context_keywords
 
-    def forward(self, passages, preprocess=False, threshold=0.5):
+    def forward(self, passages, threshold=0.5):
         if self.selector_mode == "whole-word":
-            return self.forward_whole_word_selection(passages, preprocess, threshold)
+            return self.forward_whole_word_selection(passages, threshold)
         elif self.selector_mode == "token":
-            return self.forward_token_selection(passages, preprocess, threshold)
+            return self.forward_token_selection(passages, threshold)
         else:
             raise ValueError(f"Unknown mode: {self.selector_mode}")
