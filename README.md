@@ -1,29 +1,31 @@
-# PLUM - Perplexity guided Learning for Understanding better sequences and improving Maple
+# MAPLEv2 -- Multi-task Approach for generating blackout Poetry with Linguistic Evaluation
 
-Implementation of **PLUM - Perplexity guided Learning for Understanding better sequences and improving Maple**.
-
-PLUM is an improvement over our previous work, [MAPLE](https://github.com/aditeyabaral/maple), which is a deep learning
+MAPLEv2 is an improvement over our previous work, [MAPLE](https://github.com/aditeyabaral/maple), which is a Transformer
 based blackout poetry generator that uses token classification to learn to write poetry. However, MAPLE is constrained
-to only the poems it has seen while learning and hence does not generalise well to unseen passages.
+to only the poems it has seen while learning and hence does not generalise well to unseen passages, thus in most cases
+requiring human post-processing to make the poem readable.
 
-PLUM discards poem sequences and instead leverages perplexity as a metric to learn how to pick words that form the best
-sequences, resulting in more probable and better quality poetry.
+This work proposes MAPLEv2, a multi-task approach to improve the generalisation of the model. Unlike v1, MAPLEv2 uses
+perplexity and grammatical correctness along with keyword selection to generate blackout poetry. This allows the model
+to pick better keywords and generate more readable and coherent sequences. MAPLEv2 is trained on
+the same [Blackout Poetry Dataset](https://www.kaggle.com/datasets/aditeyabaral/blackout-poetry-dataset) introduced in
+MAPLE.
 
-[[PLUM MODELS]](https://huggingface.co/plum)
+You can find some of our models on [HuggingFace Hub](https://huggingface.co/maple-v2).
 
-# How to use PLUM
+# How to use MAPLEv2
 
-## Setup PLUM Environment
+## Setup MAPLEv2 Environment
 
 1. Clone this repository
 2. Setup your environment with:
     ```bash
-    conda create -n plum python=3.9
+    conda create -n maple-v2 python=3.9
     ```
 
 ## Dataset Format
 
-PLUM required a dataset in the following format:
+MAPLEv2 requires a dataset in the following format:
 
 | passage                                           | poem                                  | indices           |
 |---------------------------------------------------|---------------------------------------|-------------------|
@@ -31,26 +33,28 @@ PLUM required a dataset in the following format:
 | A vigilante lacking of heroic qualities that\n... | lacking qualities that damn criminals | [2, 5, 6, 11, 12] |
 
 The passage is the text from which the poem is generated. The poem is the generated poem. The indices are the indices of
-the words in the text that are chosen for the poem. A sample dataset has been provided in the `data/` folder.
+the words in the text that are chosen for the poem. MAPLE's Blackout Poetry dataset has been provided in the `data/`
+folder.
 
 ## Create Training Data
 
 If you do not have a training dataset, you can follow the same instructions as in
 the [MAPLE documentation](https://github.com/aditeyabaral/maple/blob/main/README.md#create-training-data) to create one.
 
-## Train PLUM
+## Train MAPLEv2
 
-To train the PLUM, use the `src/train.py` script. The arguments are explained below.
+To train the MAPLEv2, use the `src/train.py` script. The arguments are explained below.
 
 ```bash
-usage: python plum.py [-h] --data DATA [--selector-type {context,maple}] [--selector-model-path SELECTOR_MODEL_PATH]
+usage: python src/train_v1.py [-h] --data DATA [--selector-type {context,maple}] [--selector-model-path SELECTOR_MODEL_PATH]
                 [--selector-mode {whole-word,token}] [--gpt-model-path GPT_MODEL_PATH] [--freeze-gpt]
-                [--batch-size BATCH_SIZE] [--epochs EPOCHS] [--alpha ALPHA] [--beta BETA] [--use-selector-loss]
-                [--learning-rate LEARNING_RATE] [--save-model-path SAVE_MODEL_PATH] [--save-every SAVE_EVERY]
-                [--save-local] [--hub-model-name HUB_MODEL_NAME] [--auth-token AUTH_TOKEN] [--resume RESUME]
-                [--device DEVICE]
+                [--batch-size BATCH_SIZE] [--grammar-checker-model-path GRAMMAR_CHECKER_MODEL_PATH]
+                [--freeze-grammar-checker] [--epochs EPOCHS] [--alpha ALPHA] [--beta BETA] [--gamma GAMMA]
+                [--use-selector-loss] [--learning-rate LEARNING_RATE] [--save-model-path SAVE_MODEL_PATH]
+                [--save-every SAVE_EVERY] [--save-local] [--generate-every GENERATE_EVERY]
+                [--hub-model-name HUB_MODEL_NAME] [--auth-token AUTH_TOKEN] [--resume RESUME] [--device DEVICE]
 
-Train a PLUM Model
+Train a MAPLEv2 Model
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -90,7 +94,7 @@ optional arguments:
                         Device to use
 ```
 
-PLUM can use 2 methods to select tokens from a passage:
+MAPLEv2 can use 2 methods to select tokens from a passage:
 
 - **MAPLE-style token classification**: The MAPLE-style token classification is the same as the one used in MAPLE. You
   can
@@ -108,13 +112,16 @@ PLUM can use 2 methods to select tokens from a passage:
   loss (`loss_cs`) should be used otherwise the model will not learn how to select tokens from the passage. The
   `--use-selector-loss` argument should be set.
 
-Here is a minimal example to train a PLUM model:
+Here is a minimal example to train a MAPLEv2 model:
 
 ```py
-from plum import PLUM
+from maple
 
-# Initialise a PLUM model with RoBERTa Whole Word Context Selector as Token Selector and GPT2 as Perplexity Evaluator
-model = PLUM(
+-v2
+import MAPLEv2
+
+# Initialise a MAPLEv2 model with RoBERTa Whole Word Context Selector as Token Selector and GPT2 as Perplexity Evaluator
+model = MAPLEv2(
     selector_type="context",
     selector_model_path="roberta-base",
     selector_mode="whole-word",
@@ -140,10 +147,13 @@ loss.backward()
 You can set the arguments such that a MAPLE model is trained. Set the following arguments:
 
 ```py
-from plum import PLUM
+from maple
+
+-v2
+import MAPLEv2
 
 # Initialise a MAPLE model with RoBERTa Token Classifier as Token Selector and no GPT2 Perplexity Evaluator
-model = PLUM(
+model = MAPLEv2(
     selector_type="maple",
     selector_model_path="roberta-base",
     gpt_model_path=None,

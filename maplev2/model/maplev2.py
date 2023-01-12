@@ -1,12 +1,26 @@
 import torch
 import torch.nn as nn
+from pathlib import Path
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoModelForTokenClassification, AutoTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoModelForTokenClassification,
+    AutoModelForSequenceClassification,
+    AutoTokenizer
+)
 
 from .context_selector import ContextSelector
 
 
-class PLUM(nn.Module):
+class MAPLEv2Output:
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class MAPLEv2(nn.Module):
+    MODEL_NAME = "Multi-task Approach to blackout Poetry generation using Linguistic Evaluation"
+
     def __init__(
             self,
             selector_type='context',
@@ -14,15 +28,19 @@ class PLUM(nn.Module):
             selector_mode="whole-word",
             gpt_model_path="gpt2",
             freeze_gpt=True,
+            grammar_checker_model_path=None,
+            freeze_grammar_checker=True,
             device='cuda'
     ):
-        super(PLUM, self).__init__()
+        super(MAPLEv2, self).__init__()
         self.device = device
         self.selector_type = selector_type
         self.selector_model_path = selector_model_path
         self.selector_mode = selector_mode
         self.gpt_model_path = gpt_model_path
         self.freeze_gpt = freeze_gpt
+        self.grammar_checker_model_path = grammar_checker_model_path
+        self.freeze_grammar_checker = freeze_grammar_checker
 
         if self.gpt_model_path is not None:
             self.gpt_tokenizer = AutoTokenizer.from_pretrained(self.gpt_model_path)
@@ -47,6 +65,14 @@ class PLUM(nn.Module):
                 self.device)
         else:
             raise ValueError("Invalid selector type. Use 'context' or 'maple'")
+
+        if self.grammar_checker_model_path is not None:
+            self.grammar_checker = AutoModelForSequenceClassification.from_pretrained(
+                self.grammar_checker_model_path).to(self.device)
+            if self.freeze_grammar_checker:
+                for param in self.grammar_checker.parameters():
+                    param.requires_grad = False
+            self.grammar_checker_tokenizer = AutoTokenizer.from_pretrained(self.grammar_checker_model_path)
 
     def get_input_encodings(self, tokens, labels, max_length=256):
         token_encodings = self.selector_tokenizer.batch_encode_plus(
@@ -78,6 +104,19 @@ class PLUM(nn.Module):
             .requires_grad_(True)
         return perplexity_loss
 
+    def forward_grammar(self, generated_sequences):
+        # TODO: Check function
+        encodings = self.grammar_checker_tokenizer.batch_encode_plus(
+            generated_sequences,
+            max_length=128,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        ).to(self.device)
+        logits = self.grammar_checker(**encodings).logits.requires_grad_(True)
+        logits = F.softmax(logits, dim=1)
+        return logits[:, 0].mean()
+
     def forward_maple(self, tokens, labels):
         tokens, labels = self.get_input_encodings(tokens, labels)
         outputs = self.token_selector(**tokens, labels=labels)
@@ -103,21 +142,71 @@ class PLUM(nn.Module):
         tokens = kwargs.get('tokens', [])
         labels = kwargs.get('labels', [])
         passages = kwargs.get('passages', [])
-        outputs = dict()
+        outputs = MAPLEv2Output()
+
         if self.selector_type == "context":
-            loss_cs, generated_sequences = self.forward_context_selector(passages)
-            outputs['loss_cs'] = loss_cs
-            outputs['generated_sequences'] = generated_sequences
+            if not passages:
+                raise ValueError("Variable 'passages' must be provided for context selector")
+            loss_s, generated_sequences = self.forward_context_selector(passages)
+            outputs.loss_s = loss_s
+            outputs.generated_sequences = generated_sequences
+
         elif self.selector_type == "maple":
+            if not tokens or not labels:
+                raise ValueError("Variables 'tokens' and 'labels' must be provided for maple selector")
             maple_outputs, generated_sequences = self.forward_maple(tokens, labels)
-            outputs['maple_outputs'] = maple_outputs
-            outputs['loss_m'] = maple_outputs.loss
-            outputs['generated_sequences'] = generated_sequences
+            outputs.maple_outputs = maple_outputs
+            outputs.loss_s = maple_outputs.loss
+            outputs.generated_sequences = generated_sequences
+
         else:
             raise ValueError("Invalid selector type initialized. Use 'context' or 'maple'")
 
         if self.gpt_model_path is not None:
-            loss_ppl = self.forward_gpt(generated_sequences)
-            outputs['loss_ppl'] = loss_ppl
+            outputs.loss_ppl = self.forward_gpt(generated_sequences)
+
+        if self.grammar_checker_model_path is not None:
+            outputs.loss_g = self.forward_grammar(generated_sequences)
 
         return outputs
+
+    def save(self, path):
+        if not Path(path).parent.exists():
+            raise ValueError("Invalid path provided. Parent directory does not exist")
+
+        torch.save(
+            {
+                'model_state_dict': self.state_dict(),
+                'selector_type': self.selector_type,
+                'selector_model_path': self.selector_model_path,
+                'selector_mode': self.selector_mode,
+                'gpt_model_path': self.gpt_model_path,
+                'grammar_checker_model_path': self.grammar_checker_model_path,
+                'freeze_grammar_checker': self.freeze_grammar_checker,
+                'freeze_gpt': self.freeze_gpt
+            },
+            path
+        )
+
+    def push_to_hub(self, repo_name, commit_message, auth_token):
+        if self.selector_type == "context":
+            self.token_selector.push_to_hub(repo_name, commit_message, auth_token)
+        elif self.selector_type == "maple":
+            self.token_selector.push_to_hub(repo_name, commit_message, use_auth_token=auth_token)
+            self.selector_tokenizer.push_to_hub(repo_name, commit_message, use_auth_token=auth_token)
+        else:
+            raise NotImplementedError
+
+    def load(self, path):
+        if not Path(path).exists():
+            raise ValueError("Invalid path provided. File does not exist")
+
+        checkpoint = torch.load(path, map_location=self.device)
+        self.selector_type = checkpoint['selector_type']
+        self.selector_model_path = checkpoint['selector_model_path']
+        self.selector_mode = checkpoint['selector_mode']
+        self.gpt_model_path = checkpoint['gpt_model_path']
+        self.grammar_checker_model_path = checkpoint['grammar_checker_model_path']
+        self.freeze_grammar_checker = checkpoint['freeze_grammar_checker']
+        self.freeze_gpt = checkpoint['freeze_gpt']
+        self.load_state_dict(checkpoint['model_state_dict'])
