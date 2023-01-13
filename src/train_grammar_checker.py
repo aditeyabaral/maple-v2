@@ -1,14 +1,23 @@
 import torch
+import argparse
 from tqdm.auto import tqdm
 from datasets import load_dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers import AdamW
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+parser = argparse.ArgumentParser("Train Grammar Checker on GLUE CoLA")
+parser.add_argument("--model-name", type=str, default="jxuhf/roberta-base-finetuned-cola")
+parser.add_argument("--batch-size", type=int, default=8)
+parser.add_argument("--epochs", type=int, default=10)
+parser.add_argument("--learning-rate", type=float, default=1e-8)
+parser.add_argument("--hub-username-or-org", type=str, default=None)
+parser.add_argument("--hub-repo-name", type=str, default=None)
+parser.add_argument("--hub-auth-token", type=str, default=None)
+parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+args = parser.parse_args()
 
-model_path = "bert-base-cased"
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-model = AutoModelForSequenceClassification.from_pretrained(model_path).to(device)
+tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+model = AutoModelForSequenceClassification.from_pretrained(args.model_name).to(args.device)
 
 dataset = load_dataset("glue", "cola", split="train")
 dataset = dataset.map(
@@ -16,15 +25,11 @@ dataset = dataset.map(
                                truncation=True,
                                padding="max_length"), batched=True)
 dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
-dataset = torch.utils.data.DataLoader(dataset, batch_size=4)
+dataset = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size)
 
-epochs = 10
-optimizer = AdamW(model.parameters(), lr=1e-5)
+epochs = args.epochs
+optimizer = AdamW(model.parameters(), lr=args.learning_rate)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, factor=0.5)
-
-auth_token = ""
-hub_model_name = ""
-hub_organization_or_username = ""
 
 for epoch in tqdm(range(epochs)):
     model.train()
@@ -33,9 +38,9 @@ for epoch in tqdm(range(epochs)):
     for batch in tqdm(dataset):
         optimizer.zero_grad()
         outputs = model(
-            input_ids=batch["input_ids"].to(device),
-            attention_mask=batch["attention_mask"].to(device),
-            labels=batch["label"].to(device)
+            input_ids=batch["input_ids"].to(args.device),
+            attention_mask=batch["attention_mask"].to(args.device),
+            labels=batch["label"].to(args.device)
         )
         loss = outputs.loss
         total_epoch_loss += loss
@@ -44,5 +49,13 @@ for epoch in tqdm(range(epochs)):
     total_epoch_loss /= num_batches
     scheduler.step(total_epoch_loss)
     print(f"Epoch {epoch} loss: {total_epoch_loss}")
-    model.push_to_hub(f"{hub_organization_or_username}/{hub_model_name}", use_auth_token=auth_token)
-    tokenizer.push_to_hub(f"{hub_organization_or_username}/{hub_model_name}", use_auth_token=auth_token)
+    if args.auth_token and args.hub_username_or_org and args.hub_repo_name:
+        model.push_to_hub(
+            f"{args.hub_username_or_org}/{args.hub_repo_name}",
+            commit_message=f"Epoch {epoch} loss: {total_epoch_loss}",
+            use_auth_token=args.auth_token
+        )
+        tokenizer.push_to_hub(
+            f"{args.hub_username_or_org}/{args.hub_repo_name}",
+            use_auth_token=args.auth_token
+        )

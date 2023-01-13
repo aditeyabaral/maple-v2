@@ -49,8 +49,8 @@ class MAPLEv2Trainer:
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
                 mode="min",
-                factor=0.1,
-                patience=1,
+                factor=kwargs.get("factor", 0.1),
+                patience=kwargs.get("patience", 10),
                 verbose=True,
             )
         elif scheduler_class == "step":
@@ -92,9 +92,9 @@ class MAPLEv2Trainer:
     def compute_loss(outputs, **kwargs):
         # loss = alpha * loss_s + beta * loss + gamma * loss
         loss = (
-                kwargs.get("alpha", 1) * outputs.__dict__.get("loss_s", 0) +
+                kwargs.get("alpha", 10) * outputs.__dict__.get("loss_s", 0) +
                 kwargs.get("beta", 0.0002) * outputs.__dict__.get("loss_ppl", 0) +
-                kwargs.get("gamma", 0.5) * outputs.__dict__.get("loss_g", 0)
+                kwargs.get("gamma", 0.05) * outputs.__dict__.get("loss_g", 0)
         )
         return {"loss": loss}
 
@@ -144,19 +144,19 @@ class MAPLEv2Trainer:
                 )
                 if hasattr(outputs, "loss_s") and \
                         outputs.loss_s is not None and \
-                        kwargs.get("use_absolute_context_selector_loss", True) and \
-                        model.selector_type == "context":
+                        kwargs.get("use_absolute_selector_loss", True) and \
+                        model.selector_type == "v2":
                     outputs.loss_s = torch.abs(outputs.loss_s)
 
-                generate_poems_flag = generate_every if \
-                    isinstance(generate_every, bool) else (
-                        batch_idx % (generate_every * batch_size) == 0)
-                if generate_poems_flag:
+                if kwargs.get("use_tensorboard", True):
                     self.write_losses_to_tensorboard(outputs.__dict__, steps)
-                    if hasattr(outputs, "generated_sequences"):
+                    generate_poems_flag = generate_every if \
+                        isinstance(generate_every, bool) else (
+                            batch_idx % (generate_every * batch_size) == 0)
+                    if generate_poems_flag and hasattr(outputs, "generated_sequences"):
                         self.write_generated_poems_to_tensorboard(batch_passages, outputs.generated_sequences, steps)
 
-                if kwargs.get("use_context_selector_loss", True):
+                if kwargs.get("use_selector_loss", True):
                     del outputs.loss_s
 
                 losses = self.compute_loss(outputs, **kwargs)

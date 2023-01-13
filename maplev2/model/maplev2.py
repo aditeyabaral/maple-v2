@@ -23,7 +23,7 @@ class MAPLEv2(nn.Module):
 
     def __init__(
             self,
-            selector_type='context',
+            selector_type='v2',
             selector_model_path="roberta-base",
             selector_mode="whole-word",
             gpt_model_path="gpt2",
@@ -50,13 +50,13 @@ class MAPLEv2(nn.Module):
                 for param in self.gpt_model.parameters():
                     param.requires_grad = False
 
-        if self.selector_type == "context":
+        if self.selector_type == "v2":
             self.token_selector = ContextSelector(
                 selector_model_path=self.selector_model_path,
                 selector_mode=self.selector_mode,
                 device=self.device
             ).to(self.device)
-        elif self.selector_type == "maple":
+        elif self.selector_type == "v1":
             self.selector_tokenizer = AutoTokenizer.from_pretrained(
                 self.selector_model_path,
                 add_prefix_space=True
@@ -93,6 +93,7 @@ class MAPLEv2(nn.Module):
         return token_encodings, labels
 
     def forward_gpt(self, generated_sequences):
+        generated_sequences = list(map(str.lower, generated_sequences))
         encodings = self.gpt_tokenizer.batch_encode_plus(
             generated_sequences,
             max_length=128,
@@ -105,7 +106,7 @@ class MAPLEv2(nn.Module):
         return perplexity_loss
 
     def forward_grammar(self, generated_sequences):
-        # TODO: Check function
+        generated_sequences = list(map(str.lower, generated_sequences))
         encodings = self.grammar_checker_tokenizer.batch_encode_plus(
             generated_sequences,
             max_length=128,
@@ -115,7 +116,7 @@ class MAPLEv2(nn.Module):
         ).to(self.device)
         logits = self.grammar_checker(**encodings).logits.requires_grad_(True)
         logits = F.softmax(logits, dim=1)
-        return logits[:, 0].mean()
+        return logits[:, 0].mean() + (1 / (logits[:, 1].mean() + 1e-5))
 
     def forward_maple(self, tokens, labels):
         tokens, labels = self.get_input_encodings(tokens, labels)
@@ -144,14 +145,14 @@ class MAPLEv2(nn.Module):
         passages = kwargs.get('passages', [])
         outputs = MAPLEv2Output()
 
-        if self.selector_type == "context":
+        if self.selector_type == "v2":
             if not passages:
                 raise ValueError("Variable 'passages' must be provided for context selector")
             loss_s, generated_sequences = self.forward_context_selector(passages)
             outputs.loss_s = loss_s
             outputs.generated_sequences = generated_sequences
 
-        elif self.selector_type == "maple":
+        elif self.selector_type == "v1":
             if not tokens or not labels:
                 raise ValueError("Variables 'tokens' and 'labels' must be provided for maple selector")
             maple_outputs, generated_sequences = self.forward_maple(tokens, labels)
@@ -189,9 +190,9 @@ class MAPLEv2(nn.Module):
         )
 
     def push_to_hub(self, repo_name, commit_message, auth_token):
-        if self.selector_type == "context":
+        if self.selector_type == "v2":
             self.token_selector.push_to_hub(repo_name, commit_message, auth_token)
-        elif self.selector_type == "maple":
+        elif self.selector_type == "v1":
             self.token_selector.push_to_hub(repo_name, commit_message, use_auth_token=auth_token)
             self.selector_tokenizer.push_to_hub(repo_name, commit_message, use_auth_token=auth_token)
         else:
