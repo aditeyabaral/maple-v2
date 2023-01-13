@@ -236,7 +236,7 @@ class MAPLEv2Trainer:
             repo_name = f"{kwargs['hub_organization']}/{kwargs['hub_model_name']}"
 
         model.push_to_hub(
-            repo_name=repo_name,
+            repo_name=f"selector-{model.selector_type}-{model.selector_mode}-{repo_name}",
             commit_message=f"Epoch {epoch}",
             auth_token=kwargs.get("auth_token")
         )
