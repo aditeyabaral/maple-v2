@@ -8,8 +8,8 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 from transformers import AdamW
 
-from .model import MAPLEv2
 from .dataset import MAPLEDataset
+from .model import MAPLEv2
 
 
 class MAPLEv2Trainer:

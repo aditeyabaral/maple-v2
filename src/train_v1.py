@@ -1,8 +1,9 @@
 # Train a MAPLEv1 model
 
 import sys
-import torch
 from pathlib import Path
+
+import torch
 
 sys.path.append(str(Path(__file__).parent.parent))
 

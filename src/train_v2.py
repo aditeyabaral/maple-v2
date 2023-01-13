@@ -1,8 +1,9 @@
 # Train a MAPLEv2 model
 
 import sys
-import torch
 from pathlib import Path
+
+import torch
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -39,7 +40,7 @@ trainer.train(
     gamma=0.05,
     use_tensorboard=True,
     generate_every=1000,
-    upload_model_to_hub=True,
+    upload_model_to_hub=False,
     use_selector_loss=True,
     use_absolute_selector_loss=False,
     save_every=1,

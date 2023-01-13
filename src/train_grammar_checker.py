@@ -1,9 +1,10 @@
-import torch
 import argparse
-from tqdm.auto import tqdm
+
+import torch
 from datasets import load_dataset
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from tqdm.auto import tqdm
 from transformers import AdamW
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 parser = argparse.ArgumentParser("Train Grammar Checker on GLUE CoLA")
 parser.add_argument("--model-name", type=str, default="jxuhf/roberta-base-finetuned-cola")

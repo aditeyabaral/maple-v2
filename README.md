@@ -1,4 +1,4 @@
-# MAPLEv2 -- Multi-task Approach for generating blackout Poetry with Linguistic Evaluation
+# MAPLEv2 - Multi-task Approach for generating blackout Poetry with Linguistic Evaluation
 
 MAPLEv2 is an improvement over our previous work, [MAPLE](https://github.com/aditeyabaral/maple), a Transformer
 based blackout poetry generator that uses token classification to learn to write poetry. However, MAPLE is constrained
