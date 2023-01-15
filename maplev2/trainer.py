@@ -132,49 +132,49 @@ class MAPLEv2Trainer:
         total_examples = len(dataset)
         steps = 0
         for epoch in tqdm(range(1, epochs + 1)):
-            # num_batches = 0
-            # total_epoch_loss = 0
-            # for batch_idx in tqdm(range(0, total_examples, batch_size)):
-            #     self.optimizer.zero_grad()
-            #     batch_passages, batch_tokens, batch_labels = dataset.get_batch(batch_idx, batch_size)
-            #     outputs = model(
-            #         passages=batch_passages,
-            #         tokens=batch_tokens,
-            #         labels=batch_labels
-            #     )
-            #     if hasattr(outputs, "loss_s") and \
-            #             outputs.loss_s is not None and \
-            #             kwargs.get("use_absolute_selector_loss", True) and \
-            #             model.selector_type == "v2":
-            #         outputs.loss_s = torch.abs(outputs.loss_s)
-            #
-            #     if kwargs.get("use_tensorboard", True):
-            #         self.write_losses_to_tensorboard(outputs.__dict__, steps)
-            #         generate_poems_flag = generate_every if \
-            #             isinstance(generate_every, bool) else (
-            #                 batch_idx % (generate_every * batch_size) == 0)
-            #         if generate_poems_flag and hasattr(outputs, "generated_sequences"):
-            #             self.write_generated_poems_to_tensorboard(batch_passages, outputs.generated_sequences, steps)
-            #
-            #     if kwargs.get("use_selector_loss", True):
-            #         del outputs.loss_s
-            #
-            #     losses = self.compute_loss(outputs, **kwargs)
-            #     if self.tensorboard_writer is not None:
-            #         self.write_losses_to_tensorboard(losses, steps)
-            #
-            #     for loss in losses.values():
-            #         if isinstance(loss, torch.Tensor):
-            #             loss.backward()
-            #
-            #     total_epoch_loss += sum(losses.values())
-            #     self.optimizer.step()
-            #     steps += 1
-            #     num_batches += 1
-            # total_epoch_loss = total_epoch_loss / num_batches
-            # self.scheduler.step(total_epoch_loss)
-            # print(f"Epoch {epoch} completed. Training Loss: {total_epoch_loss}")
-            # print(f"Current learning rate: {self.optimizer.param_groups[0]['lr']}")
+            num_batches = 0
+            total_epoch_loss = 0
+            for batch_idx in tqdm(range(0, total_examples, batch_size)):
+                self.optimizer.zero_grad()
+                batch_passages, batch_tokens, batch_labels = dataset.get_batch(batch_idx, batch_size)
+                outputs = model(
+                    passages=batch_passages,
+                    tokens=batch_tokens,
+                    labels=batch_labels
+                )
+                if hasattr(outputs, "loss_s") and \
+                        outputs.loss_s is not None and \
+                        kwargs.get("use_absolute_selector_loss", True) and \
+                        model.selector_type == "v2":
+                    outputs.loss_s = torch.abs(outputs.loss_s)
+
+                if kwargs.get("use_tensorboard", True):
+                    self.write_losses_to_tensorboard(outputs.__dict__, steps)
+                    generate_poems_flag = generate_every if \
+                        isinstance(generate_every, bool) else (
+                            batch_idx % (generate_every * batch_size) == 0)
+                    if generate_poems_flag and hasattr(outputs, "generated_sequences"):
+                        self.write_generated_poems_to_tensorboard(batch_passages, outputs.generated_sequences, steps)
+
+                if kwargs.get("use_selector_loss", True):
+                    del outputs.loss_s
+
+                losses = self.compute_loss(outputs, **kwargs)
+                if self.tensorboard_writer is not None:
+                    self.write_losses_to_tensorboard(losses, steps)
+
+                for loss in losses.values():
+                    if isinstance(loss, torch.Tensor):
+                        loss.backward()
+
+                total_epoch_loss += sum(losses.values())
+                self.optimizer.step()
+                steps += 1
+                num_batches += 1
+            total_epoch_loss = total_epoch_loss / num_batches
+            self.scheduler.step(total_epoch_loss)
+            print(f"Epoch {epoch} completed. Training Loss: {total_epoch_loss}")
+            print(f"Current learning rate: {self.optimizer.param_groups[0]['lr']}")
 
             self.push_training_state_to_hub(model, epoch, **kwargs)
             if epoch % kwargs.get("save_every", 1) == 0:
@@ -246,6 +246,7 @@ class MAPLEv2Trainer:
         if not Path(path).exists() or kwargs.get("auth_token", None) is None:
             return
         path = str(Path(path).absolute().resolve())
+        # TODO: Split into multiple lines
         command = f"cd \"{path}\" && git lfs install && huggingface-cli lfs-enable-largefiles . && git-lfs pull && git gc && git add . && git commit -m \"Model: Epoch {epoch}\" && git push"
         os.system(command)
 
