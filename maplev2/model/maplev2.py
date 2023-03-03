@@ -57,13 +57,16 @@ class MAPLEv2(nn.Module):
                 selector_mode=self.selector_mode,
                 device=self.device
             ).to(self.device)
+            self.selector_model = self.token_selector.selector_model
+            self.selector_tokenizer = self.token_selector.selector_tokenizer
         elif self.selector_type == "v1":
+            self.token_selector = AutoModelForTokenClassification.from_pretrained(
+                self.selector_model_path).to(self.device)
+            self.selector_model = self.token_selector.base_model
             self.selector_tokenizer = AutoTokenizer.from_pretrained(
                 self.selector_model_path,
                 add_prefix_space=True
             )
-            self.token_selector = AutoModelForTokenClassification.from_pretrained(self.selector_model_path).to(
-                self.device)
         else:
             raise ValueError("Invalid selector type. Use 'context' or 'maple'")
 
@@ -75,7 +78,41 @@ class MAPLEv2(nn.Module):
                     param.requires_grad = False
             self.grammar_checker_tokenizer = AutoTokenizer.from_pretrained(self.grammar_checker_model_path)
 
-    def get_input_encodings(self, tokens, labels, max_length=256):
+    def forward_gpt(self, generated_sequences):
+        encoding = self.selector_tokenizer.batch_encode_plus(
+            generated_sequences,
+            max_length=128,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        ).to(self.device)
+        embedding = self.selector_model(**encoding).last_hidden_state
+        encoding = self.gpt_tokenizer.batch_encode_plus(
+            generated_sequences,
+            max_length=128,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        ).to(self.device)
+        outputs = self.gpt_model(inputs_embeds=embedding, labels=encoding['input_ids'])
+        perplexity = torch.exp(outputs.loss)
+        return perplexity
+
+    def forward_grammar(self, generated_sequences):
+        encoding = self.selector_tokenizer.batch_encode_plus(
+            generated_sequences,
+            max_length=128,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        ).to(self.device)
+        embedding = self.selector_model(**encoding).last_hidden_state
+        logits = self.grammar_checker(inputs_embeds=embedding).logits
+        logits = F.softmax(logits, dim=1)
+        loss = logits[:, 0].mean() + (1 / (logits[:, 1].mean() + 1e-5))
+        return loss
+
+    def forward_maple(self, tokens, labels, max_length=256):
         token_encodings = self.selector_tokenizer.batch_encode_plus(
             tokens,
             max_length=max_length,
@@ -91,46 +128,15 @@ class MAPLEv2(nn.Module):
             labels[idx] = F.pad(labels[idx], (0, max_length - label_length), value=-100).type(torch.long)
         labels = torch.stack(labels).to(self.device)
 
-        return token_encodings, labels
-
-    def forward_gpt(self, generated_sequences):
-        generated_sequences = list(map(str.lower, generated_sequences))
-        encodings = self.gpt_tokenizer.batch_encode_plus(
-            generated_sequences,
-            max_length=128,
-            padding='max_length',
-            truncation=True,
-            return_tensors='pt'
-        ).to(self.device)
-        perplexity_loss = torch.exp(self.gpt_model(**encodings, labels=encodings['input_ids']).loss) \
-            .requires_grad_(True)
-        return perplexity_loss
-
-    def forward_grammar(self, generated_sequences):
-        generated_sequences = list(map(str.lower, generated_sequences))
-        encodings = self.grammar_checker_tokenizer.batch_encode_plus(
-            generated_sequences,
-            max_length=128,
-            padding='max_length',
-            truncation=True,
-            return_tensors='pt'
-        ).to(self.device)
-        logits = self.grammar_checker(**encodings).logits.requires_grad_(True)
-        logits = F.softmax(logits, dim=1)
-        return logits[:, 0].mean() + (1 / (logits[:, 1].mean() + 1e-5))
-
-    def forward_maple(self, tokens, labels):
-        tokens, labels = self.get_input_encodings(tokens, labels)
-        outputs = self.token_selector(**tokens, labels=labels)
+        outputs = self.token_selector(**token_encodings, labels=labels)
         logits = outputs.logits
-
         logits = logits.softmax(dim=-1).argmax(dim=-1)
         generated_sequences = list()
         for idx, logit_sequence in enumerate(logits):
             generated_sequence = list()
             for logit_idx, logit in enumerate(logit_sequence):
-                if logit and tokens['attention_mask'][idx][logit_idx]:
-                    generated_sequence.append(tokens['input_ids'][idx][logit_idx])
+                if logit and token_encodings['attention_mask'][idx][logit_idx]:
+                    generated_sequence.append(token_encodings['input_ids'][idx][logit_idx])
             generated_sequences.append(self.selector_tokenizer.decode(generated_sequence))
 
         return outputs, generated_sequences
@@ -194,8 +200,16 @@ class MAPLEv2(nn.Module):
         if self.selector_type == "v2":
             self.token_selector.push_to_hub(repo_name, commit_message, auth_token)
         elif self.selector_type == "v1":
-            self.token_selector.push_to_hub(repo_name, commit_message, use_auth_token=auth_token)
-            self.selector_tokenizer.push_to_hub(repo_name, commit_message, use_auth_token=auth_token)
+            self.token_selector.push_to_hub(
+                repo_name,
+                commit_message=f"Model: {commit_message}",
+                use_auth_token=auth_token
+            )
+            self.selector_tokenizer.push_to_hub(
+                repo_name,
+                commit_message=f"Tokenizer: {commit_message}",
+                use_auth_token=auth_token
+            )
         else:
             raise NotImplementedError
 

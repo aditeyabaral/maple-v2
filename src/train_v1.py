@@ -24,23 +24,24 @@ model = MAPLEv2(
 
 trainer = MAPLEv2Trainer(
     model=model,
-    learning_rate=1e-8
+    learning_rate=1e-5
 )
 
 trainer.train(
     dataset=dataset,
     model=model,
-    batch_size=8,
+    batch_size=3,
     epochs=10,
+    alpha=10,
     use_tensorboard=True,
-    generate_every=1000,
+    generate_every=500,
     upload_model_to_hub=True,
     use_selector_loss=True,
     use_absolute_selector_loss=False,
     save_every=1,
     save_latest=True,
     save_dir="./saved_models",
-    hub_model_name="roberta-base-maplev2",
+    hub_model_name="roberta-base-maplev1",
     hub_organization="maple-v2",
-    auth_token="your-auth-token"
+    auth_token="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"
 )

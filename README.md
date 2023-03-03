@@ -134,10 +134,10 @@ trainer.train(
     beta=0.0002,  # perplexity loss weight
     gamma=0.05,  # grammar-checker loss weight
     use_tensorboard=True,  # Whether to use tensorboard for logging losses and generated poems
-    generate_every=1000,  # sample every 1000 steps
+    generate_every=1000,  # sample every n steps
     upload_model_to_hub=True,  # upload model to HuggingFace Hub
     use_selector_loss=True,  # use selector loss
-    use_absolute_context_selector_loss=False,  # use absolute of context selector loss
+    use_absolute_selector_loss=False,  # use absolute of selector loss
     save_every=1,  # save model every epoch
     save_latest=True,  # save the latest model only
     save_dir="./saved_models",  # save directory
@@ -186,8 +186,8 @@ trainer.train(
     use_tensorboard=True,
     generate_every=1000,
     upload_model_to_hub=True,
-    use_context_selector_loss=True,
-    use_absolute_context_selector_loss=False,
+    use_selector_loss=True,
+    use_absolute_selector_loss=False,
     save_every=1,
     save_latest=True,
     save_dir="./saved_models",
@@ -197,7 +197,7 @@ trainer.train(
 )
 ```
 
-# Using MAPLEv2 to train MAPLEv1 models
+# Train MAPLEv1 models
 
 You can specify the model initialisation arguments in such a way to train only MAPLE v1 models. By specifying `None` for
 the `gpt_model_path` and `grammar_checker_model_path` arguments, the model will not use perplexity and grammatical

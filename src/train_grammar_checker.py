@@ -21,10 +21,8 @@ tokenizer = AutoTokenizer.from_pretrained(args.model_name)
 model = AutoModelForSequenceClassification.from_pretrained(args.model_name).to(args.device)
 
 dataset = load_dataset("glue", "cola", split="train")
-dataset = dataset.map(
-    lambda examples: tokenizer(examples["sentence"],
-                               truncation=True,
-                               padding="max_length"), batched=True)
+dataset = dataset.map(lambda examples: tokenizer(examples["sentence"], truncation=True, padding="max_length"),
+                      batched=True)
 dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
 dataset = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size)
 

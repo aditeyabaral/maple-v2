@@ -32,8 +32,16 @@ class ContextSelector(nn.Module):
         self.sigmoid = nn.Sigmoid().to(self.device)
 
     def push_to_hub(self, repo_name, commit_message, auth_token):
-        self.selector_model.push_to_hub(repo_name, commit_message, use_auth_token=auth_token)
-        self.selector_tokenizer.push_to_hub(repo_name, commit_message, use_auth_token=auth_token)
+        self.selector_model.push_to_hub(
+            repo_name,
+            commit_message=f"Model: {commit_message}",
+            use_auth_token=auth_token
+        )
+        self.selector_tokenizer.push_to_hub(
+            repo_name,
+            commit_message=f"Tokenizer: {commit_message}",
+            use_auth_token=auth_token
+        )
 
     def forward_whole_word_selection(self, passages, threshold=0.5):
         embedding_matrix = self.selector_model.get_input_embeddings()._parameters['weight'].to(self.device)

@@ -90,13 +90,12 @@ class MAPLEv2Trainer:
 
     @staticmethod
     def compute_loss(outputs, **kwargs):
-        # loss = alpha * loss_s + beta * loss + gamma * loss
         loss = (
-                kwargs.get("alpha", 10) * outputs.__dict__.get("loss_s", 0) +
-                kwargs.get("beta", 0.0002) * outputs.__dict__.get("loss_ppl", 0) +
-                kwargs.get("gamma", 0.05) * outputs.__dict__.get("loss_g", 0)
+                kwargs.get("alpha", 1) * outputs.__dict__.get("loss_s", 0) +
+                kwargs.get("beta", 1) * outputs.__dict__.get("loss_ppl", 0) +
+                kwargs.get("gamma", 1) * outputs.__dict__.get("loss_g", 0)
         )
-        return {"loss": loss}
+        return loss
 
     def train(
             self,
@@ -142,10 +141,8 @@ class MAPLEv2Trainer:
                     tokens=batch_tokens,
                     labels=batch_labels
                 )
-                if hasattr(outputs, "loss_s") and \
-                        outputs.loss_s is not None and \
-                        kwargs.get("use_absolute_selector_loss", True) and \
-                        model.selector_type == "v2":
+                if hasattr(outputs, "loss_s") and outputs.loss_s is not None and \
+                        kwargs.get("use_absolute_selector_loss", True):
                     outputs.loss_s = torch.abs(outputs.loss_s)
 
                 if kwargs.get("use_tensorboard", True):
@@ -156,21 +153,19 @@ class MAPLEv2Trainer:
                     if generate_poems_flag and hasattr(outputs, "generated_sequences"):
                         self.write_generated_poems_to_tensorboard(batch_passages, outputs.generated_sequences, steps)
 
-                if kwargs.get("use_selector_loss", True):
+                if not kwargs.get("use_selector_loss", True):
                     del outputs.loss_s
 
-                losses = self.compute_loss(outputs, **kwargs)
+                loss = self.compute_loss(outputs, **kwargs)
                 if self.tensorboard_writer is not None:
-                    self.write_losses_to_tensorboard(losses, steps)
+                    self.write_losses_to_tensorboard({"loss": loss}, steps)
 
-                for loss in losses.values():
-                    if isinstance(loss, torch.Tensor):
-                        loss.backward()
-
-                total_epoch_loss += sum(losses.values())
+                loss.backward()
+                total_epoch_loss += loss
                 self.optimizer.step()
                 steps += 1
                 num_batches += 1
+
             total_epoch_loss = total_epoch_loss / num_batches
             self.scheduler.step(total_epoch_loss)
             print(f"Epoch {epoch} completed. Training Loss: {total_epoch_loss}")
@@ -231,7 +226,7 @@ class MAPLEv2Trainer:
         if kwargs.get("auth_token", None) is None or kwargs.get("hub_model_name", None) is None:
             return
 
-        repo_name = f"selector-{model.selector_type}-{model.selector_mode}-{kwargs['hub_model_name']}"
+        repo_name = f"{kwargs['hub_model_name']}-selector"
         if kwargs.get("hub_organization", None):
             repo_name = f"{kwargs['hub_organization']}/{repo_name}"
 
@@ -247,7 +242,7 @@ class MAPLEv2Trainer:
             return
         path = str(Path(path).absolute().resolve())
         # TODO: Split into multiple lines
-        command = f"cd \"{path}\" && git lfs install && huggingface-cli lfs-enable-largefiles . && git-lfs pull && git gc && git add . && git commit -m \"Model: Epoch {epoch}\" && git push"
+        command = f"cd \"{path}\" && git lfs install && huggingface-cli lfs-enable-largefiles . && git-lfs pull && git gc && git-lfs purge && git add . && git commit -m \"Model: Epoch {epoch}\" && git push"
         os.system(command)
 
     @staticmethod
