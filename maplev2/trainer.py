@@ -141,6 +141,10 @@ class MAPLEv2Trainer:
                     tokens=batch_tokens,
                     labels=batch_labels
                 )
+
+                if not kwargs.get("use_selector_loss", True):
+                    del outputs.loss_s
+
                 if hasattr(outputs, "loss_s") and outputs.loss_s is not None and \
                         kwargs.get("use_absolute_selector_loss", True):
                     outputs.loss_s = torch.abs(outputs.loss_s)
@@ -152,9 +156,6 @@ class MAPLEv2Trainer:
                             batch_idx % (generate_every * batch_size) == 0)
                     if generate_poems_flag and hasattr(outputs, "generated_sequences"):
                         self.write_generated_poems_to_tensorboard(batch_passages, outputs.generated_sequences, steps)
-
-                if not kwargs.get("use_selector_loss", True):
-                    del outputs.loss_s
 
                 loss = self.compute_loss(outputs, **kwargs)
                 if self.tensorboard_writer is not None:
