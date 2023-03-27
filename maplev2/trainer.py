@@ -248,8 +248,8 @@ class MAPLEv2Trainer:
         if not Path(path).exists() or kwargs.get("auth_token", None) is None:
             return
         path = str(Path(path).absolute().resolve())
-        # TODO: Split into multiple lines
-        command = f"cd \"{path}\" && git lfs install && huggingface-cli lfs-enable-largefiles . && git-lfs pull && git gc && git-lfs purge && git add . && git commit -m \"Model: Epoch {epoch}\" && git push"
+        command = f"cd \"{path}\" && git lfs install && huggingface-cli lfs-enable-largefiles . && git-lfs pull && " \
+                  f"git gc && git-lfs prune && git add . && git commit -m \"Model: Epoch {epoch}\" && git push"
         os.system(command)
 
     @staticmethod
