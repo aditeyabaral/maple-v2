@@ -48,6 +48,7 @@ class ContextSelector(nn.Module):
         context_keywords = list()
         loss_cs = list()
         for passage in passages:
+            current_threshold = threshold
             token_ids_map = {
                 word: self.selector_tokenizer.encode(
                     word,
@@ -70,7 +71,10 @@ class ContextSelector(nn.Module):
 
             q = self.sigmoid(self.W(embedding_attention_matrix).flatten())
             c_subset = self.c[torch.LongTensor(input_ids)]
-            input_ids_selection = (c_subset >= threshold).tolist()
+            input_ids_selection = (c_subset >= current_threshold).tolist()
+            while not input_ids_selection and current_threshold > 0:
+                input_ids_selection = (c_subset >= threshold).tolist()
+                current_threshold -= 0.05
 
             selected_input_ids = input_ids[input_ids_selection]
             current_context_keywords = list()
@@ -92,6 +96,7 @@ class ContextSelector(nn.Module):
         context_keywords = list()
         loss_cs = list()
         for passage in passages:
+            current_threshold = threshold
             input_ids = self.selector_tokenizer.encode(passage, add_special_tokens=False)
             tokens = [self.selector_tokenizer.decode(w) for w in input_ids]
 
@@ -108,7 +113,10 @@ class ContextSelector(nn.Module):
 
             q = self.sigmoid(self.W(embedding_attention_matrix).flatten())
             c_subset = self.c[torch.LongTensor(input_ids)]
-            input_ids_selection = (c_subset >= threshold).tolist()
+            input_ids_selection = (c_subset >= current_threshold).tolist()
+            while not input_ids_selection and current_threshold > 0:
+                input_ids_selection = (c_subset >= threshold).tolist()
+                current_threshold -= 0.05
 
             selected_input_ids = np.asarray(input_ids)[input_ids_selection]
             current_context_keywords = list()
