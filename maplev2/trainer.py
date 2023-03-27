@@ -145,6 +145,12 @@ class MAPLEv2Trainer:
                 if not kwargs.get("use_selector_loss", True):
                     del outputs.loss_s
 
+                if not kwargs.get("use_ppl_loss", True):
+                    del outputs.loss_ppl
+
+                if not kwargs.get("use_grammar_loss", True):
+                    del outputs.loss_g
+
                 if hasattr(outputs, "loss_s") and outputs.loss_s is not None and \
                         kwargs.get("use_absolute_selector_loss", True):
                     outputs.loss_s = torch.abs(outputs.loss_s)
