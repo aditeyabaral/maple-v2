@@ -16,8 +16,6 @@ class MAPLEDataset(Dataset):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        assert len(self.passages) == len(self.tokens) == len(self.labels)
-
     def __len__(self):
         return len(self.passages)
 
@@ -40,22 +38,23 @@ class MAPLEDataset(Dataset):
             raise NotImplementedError
 
         df = load_function(path)
-        df = df.drop_duplicates(subset=["passage", "poem"], ignore_index=True)
-        passages = df['passage'].tolist()
-        tokens = list(map(word_tokenize, passages))
-        labels = list()
-        for i in range(df.shape[0]):
-            indices = df["indices"][i]
-            indices_length = len(tokens[i])
-            selection_list = torch.zeros(indices_length)
-            for idx in indices:
-                selection_list[idx] = 1
-            labels.append(selection_list)
+        df = df.drop_duplicates(subset=["passage"], ignore_index=True)
+        self.passages = df['passage'].tolist()
 
-        assert len(passages) == len(tokens) == len(labels)
-        self.passages = passages
-        self.tokens = tokens
-        self.labels = labels
+        if "indices" in df.columns:
+            self.tokens = list(map(word_tokenize, self.passages))
+            labels = list()
+            for i in range(df.shape[0]):
+                indices = df["indices"][i]
+                indices_length = len(self.tokens[i])
+                selection_list = torch.zeros(indices_length)
+                for idx in indices:
+                    selection_list[idx] = 1
+                labels.append(selection_list)
+            self.labels = labels
+        else:
+            self.labels = [None] * df.shape[0]
+            self.tokens = [None] * df.shape[0]
 
     def get_batch(self, index, batch_size):
         return (

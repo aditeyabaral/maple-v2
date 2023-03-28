@@ -25,7 +25,7 @@ class MAPLEv2(nn.Module):
     def __init__(
             self,
             selector_type='v2',
-            selector_model_path="roberta-base",
+            selector_model_path="allenai/longformer-base-4096",
             selector_mode="whole-word",
             gpt_model_path="gpt2",
             freeze_gpt=True,
@@ -42,14 +42,6 @@ class MAPLEv2(nn.Module):
         self.freeze_gpt = freeze_gpt
         self.grammar_checker_model_path = grammar_checker_model_path
         self.freeze_grammar_checker = freeze_grammar_checker
-
-        if self.gpt_model_path is not None:
-            self.gpt_tokenizer = AutoTokenizer.from_pretrained(self.gpt_model_path)
-            self.gpt_tokenizer.pad_token = self.gpt_tokenizer.eos_token
-            self.gpt_model = AutoModelForCausalLM.from_pretrained(self.gpt_model_path).to(self.device)
-            if self.freeze_gpt:
-                for param in self.gpt_model.parameters():
-                    param.requires_grad = False
 
         if self.selector_type == "v2":
             self.token_selector = ContextSelector(
@@ -68,7 +60,15 @@ class MAPLEv2(nn.Module):
                 add_prefix_space=True
             )
         else:
-            raise ValueError("Invalid selector type. Use 'context' or 'maple'")
+            raise ValueError("Invalid selector type. Use 'v1' or 'v2'.")
+
+        if self.gpt_model_path is not None:
+            self.gpt_tokenizer = AutoTokenizer.from_pretrained(self.gpt_model_path)
+            self.gpt_tokenizer.pad_token = self.gpt_tokenizer.eos_token
+            self.gpt_model = AutoModelForCausalLM.from_pretrained(self.gpt_model_path).to(self.device)
+            if self.freeze_gpt:
+                for param in self.gpt_model.parameters():
+                    param.requires_grad = False
 
         if self.grammar_checker_model_path is not None:
             self.grammar_checker = AutoModelForSequenceClassification.from_pretrained(
@@ -112,7 +112,10 @@ class MAPLEv2(nn.Module):
         loss = logits[:, 0].mean() + (1 / (logits[:, 1].mean() + 1e-5))
         return loss
 
-    def forward_maple(self, tokens, labels, max_length=256):
+    def forward_maple(self, tokens, labels, max_length="max_length"):
+        if max_length == "max_length":
+            max_length = max([len(token) for token in tokens])
+        max_length = min(max_length, self.selector_tokenizer.model_max_length)
         token_encodings = self.selector_tokenizer.batch_encode_plus(
             tokens,
             max_length=max_length,
