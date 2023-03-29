@@ -87,7 +87,7 @@ class ContextSelector(nn.Module):
             add_special_tokens=False,
             return_tensors="pt",
             is_split_into_words=True,
-            padding="max_length",
+            padding=True,
             truncation=True,
             max_length=self.selector_tokenizer.model_max_length,
             return_attention_mask=True
@@ -99,6 +99,10 @@ class ContextSelector(nn.Module):
             input_encodings,
             threshold
         )
+
+        # TODO: Do these help?
+        del word_embedding_matrices
+        del input_encodings
         return loss_cs, generated_sequences
 
     def forward_token_selection(self, passages, threshold=0.5):
@@ -107,7 +111,7 @@ class ContextSelector(nn.Module):
             add_special_tokens=False,
             return_tensors="pt",
             is_split_into_words=False,
-            padding="max_length",
+            padding=True,
             truncation=True,
             max_length=self.selector_tokenizer.model_max_length,
             return_attention_mask=True,
