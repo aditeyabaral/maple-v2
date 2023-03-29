@@ -12,10 +12,10 @@ from maplev2 import MAPLEv2, MAPLEDataset, MAPLEv2Trainer
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 dataset = MAPLEDataset()
-dataset.load("data/blackout_poetry_dataset.json")
+dataset.load("data/poetry_foundation.csv")
 
 model = MAPLEv2(
-    selector_type="v1",
+    selector_type="v2",
     selector_model_path="allenai/longformer-base-4096",
     selector_mode="whole-word",
     gpt_model_path="gpt2",
@@ -34,7 +34,7 @@ trainer.train(
     dataset=dataset,
     model=model,
     batch_size=2,
-    epochs=10,
+    epochs=5,
     alpha=10,
     beta=0.002,
     gamma=0.05,

@@ -1,5 +1,4 @@
 import nltk
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -43,29 +42,21 @@ class ContextSelector(nn.Module):
             use_auth_token=auth_token
         )
 
-    def forward_whole_word_selection(self, passages, threshold=0.5):
-        context_keywords = list()
+    # TODO: Think of better function name
+    def self_attentive_selection(self, word_embedding_matrices, input_encodings, threshold=0.5):
         loss_cs = list()
-        for passage in passages:
-            current_threshold = threshold
-            token_ids_map = {
-                word: self.selector_tokenizer.encode(
-                    word,
-                    add_special_tokens=False
-                ) for word in word_tokenize(passage)
-            }
-            input_ids = list(token_ids_map.values())
-            input_ids = torch.tensor(np.asarray([item for sublist in input_ids for item in sublist])) \
-                .unsqueeze(0).to(self.device)
+        generated_sequences = list()
+        num_words_list = list()
 
-            word_embedding_matrix = self.selector_model(input_ids=input_ids).last_hidden_state[0]
+        for i, word_embedding_matrix in enumerate(word_embedding_matrices):
+            current_threshold = threshold
             embedding_dim = word_embedding_matrix.shape[1]
             embedding_dim_root = embedding_dim ** 0.5
             self_attention_matrix = torch.matmul(word_embedding_matrix, word_embedding_matrix.T) / embedding_dim_root
             self_attention_matrix = F.softmax(self_attention_matrix, dim=0)
             embedding_attention_matrix = torch.matmul(self_attention_matrix, word_embedding_matrix).to(self.device)
 
-            input_ids = input_ids.flatten()
+            input_ids = input_encodings["input_ids"][i]
             q = self.sigmoid(self.W(embedding_attention_matrix).flatten())
             c_subset = self.c[torch.LongTensor(input_ids.detach().clone().tolist())]
             input_ids_selection = (c_subset >= current_threshold).tolist()
@@ -74,56 +65,61 @@ class ContextSelector(nn.Module):
                 current_threshold -= 0.05
 
             selected_input_ids = input_ids[input_ids_selection]
-            current_context_keywords = list()
-            for selected_input_id in selected_input_ids:
-                for token in token_ids_map:
-                    if selected_input_id in token_ids_map[token] and token not in current_context_keywords:
-                        current_context_keywords.append(token)
-                        break
-            context_keywords.append(current_context_keywords)
+            generated_sequence = self.selector_tokenizer.decode(
+                selected_input_ids.tolist(),
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True,
+            )
+            num_words_list.append(selected_input_ids.shape[0])
+            generated_sequences.append(generated_sequence)
             loss = F.kl_div(q.log(), c_subset)
             loss_cs.append(loss)
 
-        num_words_list = torch.tensor(list(map(len, context_keywords))).to(self.device)
-        loss_cs = torch.stack(loss_cs).to(self.device) * torch.tensor(num_words_list)
-        loss_cs = loss_cs.mean()
-        return loss_cs, context_keywords
+        loss_cs = torch.stack(loss_cs).to(self.device)
+        num_words_list = torch.tensor(num_words_list).to(self.device)
+        loss_cs = (loss_cs * num_words_list).mean()
+        return loss_cs, generated_sequences
+
+    def forward_whole_word_selection(self, passages, threshold=0.5):
+        passage_words = list(map(word_tokenize, passages))
+        input_encodings = self.selector_tokenizer.batch_encode_plus(
+            passage_words,
+            add_special_tokens=False,
+            return_tensors="pt",
+            is_split_into_words=True,
+            padding=True,
+            truncation=True,
+            max_length=self.selector_tokenizer.model_max_length,
+            return_attention_mask=True
+        ).to(self.device)
+
+        word_embedding_matrices = self.selector_model(**input_encodings).last_hidden_state
+        loss_cs, generated_sequences = self.self_attentive_selection(
+            word_embedding_matrices,
+            input_encodings,
+            threshold
+        )
+        return loss_cs, generated_sequences
 
     def forward_token_selection(self, passages, threshold=0.5):
-        context_keywords = list()
-        loss_cs = list()
-        for passage in passages:
-            current_threshold = threshold
-            input_ids = self.selector_tokenizer.encode(passage, add_special_tokens=False)
-            input_ids = torch.tensor(input_ids).unsqueeze(0).to(self.device)
+        input_encodings = self.selector_tokenizer.batch_encode_plus(
+            passages,
+            add_special_tokens=False,
+            return_tensors="pt",
+            is_split_into_words=False,
+            padding=True,
+            truncation=True,
+            max_length=self.selector_tokenizer.model_max_length,
+            return_attention_mask=True,
+        ).to(self.device)
 
-            word_embedding_matrix = self.selector_model(input_ids=input_ids).last_hidden_state[0]
-            embedding_dim = word_embedding_matrix.shape[1]
-            embedding_dim_root = embedding_dim ** 0.5
-            self_attention_matrix = torch.matmul(word_embedding_matrix, word_embedding_matrix.T) / embedding_dim_root
-            self_attention_matrix = F.softmax(self_attention_matrix, dim=0)
-            embedding_attention_matrix = torch.matmul(self_attention_matrix, word_embedding_matrix).to(self.device)
-
-            input_ids = input_ids.flatten()
-            q = self.sigmoid(self.W(embedding_attention_matrix).flatten())
-            c_subset = self.c[torch.LongTensor(input_ids.detach().clone().tolist())]
-            input_ids_selection = (c_subset >= current_threshold).tolist()
-            while not input_ids_selection and current_threshold > 0:
-                input_ids_selection = (c_subset >= threshold).tolist()
-                current_threshold -= 0.05
-
-            selected_input_ids = input_ids[input_ids_selection]
-            current_context_keywords = list()
-            for selected_input_id in selected_input_ids:
-                current_context_keywords.append(self.selector_tokenizer.decode(selected_input_id))
-            context_keywords.append(current_context_keywords)
-            loss = F.kl_div(q.log(), c_subset)
-            loss_cs.append(loss)
-
-        num_words_list = torch.tensor(list(map(len, context_keywords))).to(self.device)
-        loss_cs = torch.stack(loss_cs).to(self.device) * torch.tensor(num_words_list)
-        loss_cs = loss_cs.mean()
-        return loss_cs, context_keywords
+        word_embedding_matrices = self.selector_model(**input_encodings).last_hidden_state
+        loss_cs, generated_sequences = self.self_attentive_selection(
+            word_embedding_matrices,
+            input_encodings,
+            threshold
+        )
+        return loss_cs, generated_sequences
 
     def forward(self, passages, threshold=0.5):
         if self.selector_mode == "whole-word":

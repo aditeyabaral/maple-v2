@@ -10,7 +10,7 @@ from transformers import (
     AutoTokenizer
 )
 
-from .context_selector import ContextSelector
+from .context_selector_2 import ContextSelector
 
 
 class MAPLEv2Output:
@@ -121,7 +121,8 @@ class MAPLEv2(nn.Module):
             max_length=max_length,
             padding='max_length',
             truncation=True,
-            add_special_tokens=False,
+            # TODO: Verify this
+            # add_special_tokens=False,
             is_split_into_words=True,
             return_tensors='pt'
         ).to(self.device)
@@ -145,8 +146,7 @@ class MAPLEv2(nn.Module):
         return outputs, generated_sequences
 
     def forward_context_selector(self, passages):
-        loss_cs, context_keywords = self.token_selector(passages)
-        generated_sequences = list(map(' '.join, context_keywords))
+        loss_cs, generated_sequences = self.token_selector(passages)
         return loss_cs, generated_sequences
 
     def forward(self, **kwargs):

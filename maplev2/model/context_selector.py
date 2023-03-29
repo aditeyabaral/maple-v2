@@ -88,7 +88,10 @@ class ContextSelector(nn.Module):
             context_keywords.append(current_context_keywords)
             loss = F.kl_div(q.log(), c_subset)
             loss_cs.append(loss)
-        loss_cs = torch.stack(loss_cs).mean()
+
+        num_words_list = torch.tensor(list(map(len, context_keywords))).to(self.device)
+        loss_cs = torch.stack(loss_cs).to(self.device) * num_words_list
+        loss_cs = loss_cs.mean()
         return loss_cs, context_keywords
 
     def forward_token_selection(self, passages, threshold=0.5):
@@ -127,7 +130,9 @@ class ContextSelector(nn.Module):
             loss = F.kl_div(q.log(), c_subset)
             loss_cs.append(loss)
 
-        loss_cs = torch.stack(loss_cs).mean()
+        num_words_list = torch.tensor(list(map(len, context_keywords))).to(self.device)
+        loss_cs = torch.stack(loss_cs).to(self.device) * num_words_list
+        loss_cs = loss_cs.mean()
         return loss_cs, context_keywords
 
     def forward(self, passages, threshold=0.5):
