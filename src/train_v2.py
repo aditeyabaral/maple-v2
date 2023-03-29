@@ -12,7 +12,10 @@ from maplev2 import MAPLEv2, MAPLEDataset, MAPLEv2Trainer
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 dataset = MAPLEDataset()
-dataset.load("data/poetry_foundation.csv")
+dataset.load(
+    "data/poetry_foundation.csv",
+    word_limit=4096
+)
 
 model = MAPLEv2(
     selector_type="v2",

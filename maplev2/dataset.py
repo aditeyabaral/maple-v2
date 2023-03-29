@@ -26,7 +26,7 @@ class MAPLEDataset(Dataset):
             self.labels[index]
         )
 
-    def load(self, path):
+    def load(self, path, word_limit=None):
         if not Path(path).exists():
             raise FileNotFoundError
 
@@ -39,6 +39,9 @@ class MAPLEDataset(Dataset):
 
         df = load_function(path)
         df = df.drop_duplicates(subset=["passage"], ignore_index=True)
+        df["length"] = df["passage"].apply(lambda x: len(x.split()))
+        if word_limit is not None:
+            df = df[df["length"] <= word_limit]
         self.passages = df['passage'].tolist()
 
         if "indices" in df.columns:

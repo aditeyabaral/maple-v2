@@ -100,9 +100,7 @@ class ContextSelector(nn.Module):
             threshold
         )
 
-        # TODO: Do these help?
-        del word_embedding_matrices
-        del input_encodings
+        # del input_encodings
         return loss_cs, generated_sequences
 
     def forward_token_selection(self, passages, threshold=0.5):
