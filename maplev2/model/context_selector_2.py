@@ -87,7 +87,7 @@ class ContextSelector(nn.Module):
             add_special_tokens=False,
             return_tensors="pt",
             is_split_into_words=True,
-            padding=True,
+            padding="max_length",
             truncation=True,
             max_length=self.selector_tokenizer.model_max_length,
             return_attention_mask=True
@@ -107,7 +107,7 @@ class ContextSelector(nn.Module):
             add_special_tokens=False,
             return_tensors="pt",
             is_split_into_words=False,
-            padding=True,
+            padding="max_length",
             truncation=True,
             max_length=self.selector_tokenizer.model_max_length,
             return_attention_mask=True,

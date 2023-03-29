@@ -10,6 +10,7 @@ from transformers import (
     AutoTokenizer
 )
 
+# TODO: Experiment and see which fits in memory
 from .context_selector_2 import ContextSelector
 
 
