@@ -42,7 +42,6 @@ class ContextSelector(nn.Module):
             use_auth_token=auth_token
         )
 
-    # TODO: Think of better function name
     def self_attentive_selection(self, word_embedding_matrices, input_encodings, threshold=0.5):
         loss_cs = list()
         generated_sequences = list()

@@ -13,7 +13,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 dataset = MAPLEDataset()
 dataset.load(
-    "data/poetry_foundation.csv",
+    "data/blackout_poetry_dataset.csv",
     word_limit=4096
 )
 

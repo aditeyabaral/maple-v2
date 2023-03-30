@@ -49,6 +49,8 @@ class MAPLEDataset(Dataset):
             labels = list()
             for i in range(df.shape[0]):
                 indices = df["indices"][i]
+                if isinstance(indices, str):
+                    indices = eval(indices)
                 indices_length = len(self.tokens[i])
                 selection_list = torch.zeros(indices_length)
                 for idx in indices:
