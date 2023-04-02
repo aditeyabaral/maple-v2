@@ -168,7 +168,7 @@ class MAPLEv2Trainer:
                     self.write_losses_to_tensorboard({"loss": loss}, steps)
 
                 loss.backward()
-                total_epoch_loss += loss
+                total_epoch_loss += loss.detach().cpu().item()
                 self.optimizer.step()
                 steps += 1
                 num_batches += 1
